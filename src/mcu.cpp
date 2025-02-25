@@ -342,6 +342,7 @@ void MCU_DeviceWrite(uint32_t address, uint8_t data)
     case DEV_P7DDR:
         break;
     case DEV_SCR:
+        MCU_Interrupt_SetRequest(INTERRUPT_SOURCE_UART_TX, (data & 0x80) != 0 && (dev_register[DEV_SSR] & 0x80) != 0);
         break;
     case DEV_WCR:
         break;
@@ -435,7 +436,7 @@ void MCU_DeviceWrite(uint32_t address, uint8_t data)
         {
             dev_register[address] &= ~0x10;
         }
-        break;
+        return;
     }
     default:
         address += 0;
@@ -531,7 +532,7 @@ void MCU_DeviceReset(void)
     // dev_register[0x00] = 0x03;
     // dev_register[0x7c] = 0x87;
     dev_register[DEV_RAME] = 0x80;
-    dev_register[DEV_SSR] = 0x80;
+    dev_register[DEV_SSR] = 0x87;
 }
 
 void MCU_UpdateAnalog(uint64_t cycles)
