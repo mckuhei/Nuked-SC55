@@ -304,15 +304,15 @@ void LCD_Init(void)
 
     SDL_Surface* bg = nullptr;
 
-    if (romset == ROM_SET_MK2) {
-        bg = SDL_LoadBMP("sc55mkII_background.bmp");
+    if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2) {
+        bg = SDL_LoadBMP("sc55_background.bmp");
         if (bg) {
             background_enabled = 1;
         }
     }
 
     int screen_width, screen_height;
-    if (romset == ROM_SET_MK2 && background_enabled) {
+    if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2 && background_enabled) {
         screen_width = 1120;
         screen_height = 233;
     } else {
@@ -696,7 +696,7 @@ void LCD_Update(void)
         rect.h = lcd_height;
         SDL_UpdateTexture(texture, &rect, lcd_buffer, lcd_width_max * 4);
 
-        if (romset == ROM_SET_MK2 && background_enabled) {
+        if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2 && background_enabled) {
             SDL_Rect srcrect, dstrect;
             srcrect.x = 0;
             srcrect.y = 0;
@@ -742,6 +742,55 @@ void LCD_Update(void)
                 dstrect.h = 59;
                 SDL_RenderCopyEx(renderer, background, &srcrect, &dstrect, (volume - 0.5f) * 300.0, NULL, SDL_FLIP_NONE);
             }
+            {
+                int type = 1;
+                if (romset == ROM_SET_MK1) {
+                    switch (revision) {
+                        case REVISION_SC55_100:
+                        type = 0;
+                        break;
+                    case REVISION_SC55_110:
+                        type = 2;
+                        break;
+                    case REVISION_SC55_120:
+                    case REVISION_SC55_200:
+                        type = -1;
+                        break;
+                    default:
+                        type = 1;
+                        break;
+                    }
+                } else if (romset == ROM_SET_MK2) {
+                    type = 3;
+                }
+                if (type >= 0) {
+                    srcrect.x = 804 + 262 * (type & 1);
+                    srcrect.y = 466 + 50 * (type >> 1);
+                    srcrect.w = 262;
+                    srcrect.h = 50;
+                    dstrect.x = 533;
+                    dstrect.y = 195;
+                    dstrect.w = 131;
+                    dstrect.h = 25;
+                    SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+                }
+                if (type == -1 || type == 3) {
+                    if (type == -1) {
+                        srcrect.x = 1592;
+                    }
+                    if (type == 3) {
+                        srcrect.x = 1392;
+                    }
+                    srcrect.y = 466;
+                    srcrect.w = 200;
+                    srcrect.h = 104;
+                    dstrect.x = 696;
+                    dstrect.y = 174;
+                    dstrect.w = 100;
+                    dstrect.h = 52;
+                    SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+                }
+            }
             srcrect.x = 0;
             srcrect.y = 0;
             srcrect.w = 740;
@@ -768,7 +817,7 @@ void LCD_Update(void)
                 MCU_EncoderTrigger(1);
         }
 
-        if (romset == ROM_SET_MK2 && background_enabled) {
+        if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2 && background_enabled) {
             switch (sdl_event.type)
             {
             case SDL_MOUSEBUTTONUP:

@@ -142,6 +142,7 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
 };
 
 int romset = ROM_SET_MK2;
+int revision = REVISION_UNKNOWN;
 
 static const int ROM1_SIZE = 0x8000;
 static const int ROM2_SIZE = 0x80000;
@@ -657,6 +658,23 @@ uint8_t MCU_Read(uint32_t address)
                     if (mcu_cm300)
                         return 0xff;
 
+                    if (romset == ROM_SET_MK1) {
+                        uint8_t state = 0;
+                        if ((io_sd & 0x40) == 0) {
+                            state |= 1;
+                            // printf("ALL on\n");
+                        }
+                        if ((io_sd & 0x20) == 0) {
+                            state |= 2;
+                            // printf("MUTE on\n");
+                        }
+                        if ((io_sd & 0x10) == 0) {
+                            state |= 4;
+                            // printf("STANDBY on\n");
+                        }
+                        LCD_ButtonEnable(state);
+                    }
+
                     LCD_Enable((io_sd & 8) != 0);
 
                     uint8_t data = 0xff;
@@ -1001,7 +1019,6 @@ void MCU_UpdateUART_RX(void)
     MCU_Interrupt_SetRequest(INTERRUPT_SOURCE_UART_RX, (dev_register[DEV_SCR] & 0x40) != 0);
 }
 
-// dummy TX
 void MCU_UpdateUART_TX(void)
 {
     if ((dev_register[DEV_SCR] & 32) == 0) // TX disabled
@@ -1037,13 +1054,6 @@ void MCU_UpdateUART_TX(void)
 void MCU_UpdateUART() {
     if (uart_tx_ptr == uart_tx_buffer) return;
     uint8_t *tx_buffer = uart_tx_buffer;
-    // do {
-    //     if (*tx_buffer == 0xFE) { // Active sense
-    //         tx_buffer++;
-    //     } else {
-    //         break;
-    //     }
-    // } while (tx_buffer != uart_tx_ptr);
     if (uart_tx_ptr == tx_buffer) {
         // uart_tx_ptr = uart_tx_buffer;
         return;
@@ -1242,20 +1252,22 @@ void MCU_WriteP0(uint8_t data)
 {
     mcu_p0_data = data;
     // printf("P0: %d\n", data);
-    uint8_t state = 0;
-    if ((data & 0x40) == 0) {
-        state |= 1;
-        // printf("ALL on\n");
+    if (romset == ROM_SET_MK2) {
+        uint8_t state = 0;
+        if ((data & 0x40) == 0) {
+            state |= 1;
+            // printf("ALL on\n");
+        }
+        if ((data & 0x20) == 0) {
+            state |= 2;
+            // printf("MUTE on\n");
+        }
+        if ((data & 0x10) == 0) {
+            state |= 4;
+            // printf("STANDBY on\n");
+        }
+        LCD_ButtonEnable(state);
     }
-    if ((data & 0x20) == 0) {
-        state |= 2;
-        // printf("MUTE on\n");
-    }
-    if ((data & 0x10) == 0) {
-        state |= 4;
-        // printf("STANDBY on\n");
-    }
-    LCD_ButtonEnable(state);
 }
 
 void MCU_WriteP1(uint8_t data)
@@ -1998,6 +2010,40 @@ int main(int argc, char *argv[])
 
     // Close all files as they no longer needed being open
     closeAllR();
+
+    if (romset == ROM_SET_MK1) {
+        if (strncmp((const char *) &rom2[0xf380], "Ver", 3) == 0) {
+            if (rom2[0xf383] == '1') {
+                if (rom2[0xf385] == '0') {
+                    revision = REVISION_SC55_100;
+                }
+                if (rom2[0xf385] == '1') {
+                    revision = REVISION_SC55_120;
+                }
+                if (rom2[0xf385] == '2') {
+                    revision = REVISION_SC55_120;
+                }
+            }
+            if (rom2[0xf383] == '2') {
+                revision = REVISION_SC55_200;
+            }
+        }
+        printf("Detected rom revision: ");
+        switch (revision) {
+            case REVISION_SC55_100:
+                printf("1.00\n");
+                break;
+            case REVISION_SC55_110:
+                printf("1.10\n");
+                break;
+            case REVISION_SC55_120:
+                printf("1.20\n");
+                break;
+            case REVISION_SC55_200:
+                printf("2.00\n");
+                break;
+        }
+    }
 
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0)
     {

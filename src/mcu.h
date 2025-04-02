@@ -448,9 +448,18 @@ enum {
     ROM_SET_COUNT
 };
 
+enum {
+    REVISION_UNKNOWN = 0,
+    REVISION_SC55_100,
+    REVISION_SC55_110,
+    REVISION_SC55_120,
+    REVISION_SC55_200
+};
+
 extern const char* rs_name[ROM_SET_COUNT];
 
 extern int romset;
+extern int revision;
 
 extern int mcu_mk1;
 extern int mcu_cm300;
