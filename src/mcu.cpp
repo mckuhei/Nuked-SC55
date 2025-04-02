@@ -2042,6 +2042,9 @@ int main(int argc, char *argv[])
             case REVISION_SC55_200:
                 printf("2.00\n");
                 break;
+            default:
+                printf("Unknown\n");
+                break;
         }
     }
 
