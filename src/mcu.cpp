@@ -1415,10 +1415,15 @@ void MCU_PostSample(int *sample)
 {
     sample[0] >>= 12;
     sample[1] >>= 12;
+#ifdef INT64_MAX
+    sample[0] = (int) (((int64_t) sample[0] * volume) >> 16);
+    sample[1] = (int) (((int64_t) sample[1] * volume) >> 16);
+#else
     uint16_t volumeH = (volume >> 4) & 0xFFF;
     uint16_t volumeL = volume & 0xF;
     sample[0] = ((sample[0] * volumeH) >> 12) + ((sample[0] * volumeL) >> 16);
     sample[1] = ((sample[1] * volumeH) >> 12) + ((sample[1] * volumeL) >> 16);
+#endif
     if (sample[0] > INT16_MAX)
         sample[0] = INT16_MAX;
     else if (sample[0] < INT16_MIN)
@@ -1668,6 +1673,7 @@ int main(int argc, char *argv[])
 #ifdef SERIAL_ENABLED
                 printf("  -serialtype <serial_type>            Set serial type.\n");
 #endif
+                printf("  -revision <revision_number>          Set revision.\n");
                 printf("\n");
                 printf("  -mk2                                 Use SC-55mk2 ROM set.\n");
                 printf("  -st                                  Use SC-55st ROM set.\n");
@@ -1709,6 +1715,10 @@ int main(int argc, char *argv[])
                 serialType = argv[++i];
             }
 #endif
+            else if (!strcmp(argv[i], "-revision") && i != argc - 1)
+            {
+                revision = atoi(argv[++i]);
+            }
         }
     }
 
@@ -2011,14 +2021,14 @@ int main(int argc, char *argv[])
     // Close all files as they no longer needed being open
     closeAllR();
 
-    if (romset == ROM_SET_MK1) {
-        if (strncmp((const char *) &rom2[0xf380], "Ver", 3) == 0) {
+    if (romset == ROM_SET_MK1 && revision == REVISION_UNKNOWN) {
+        if (strncmp((const char *) &rom2[0xf380], "Ver", 3) == 0 && rom2[0xf384] == '.') {
             if (rom2[0xf383] == '1') {
                 if (rom2[0xf385] == '0') {
                     revision = REVISION_SC55_100;
                 }
                 if (rom2[0xf385] == '1') {
-                    revision = REVISION_SC55_120;
+                    revision = REVISION_SC55_110;
                 }
                 if (rom2[0xf385] == '2') {
                     revision = REVISION_SC55_120;
