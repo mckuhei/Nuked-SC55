@@ -43,6 +43,10 @@
 #include "mcu.h"
 #include "submcu.h"
 #include "utils/files.h"
+#ifdef WIN32
+#include <Windows.h>
+#include "SDL_syswm.h"
+#endif
 
 
 static uint32_t LCD_DL, LCD_N, LCD_F, LCD_D, LCD_C, LCD_B, LCD_ID, LCD_S;
@@ -347,6 +351,10 @@ void LCD_Init(void)
 
     fread(lcd_background, 1, sizeof(lcd_background), raw);
     fclose(raw);
+
+#ifdef WIN32
+    SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
+#endif
 
     lcd_init = 1;
 }
@@ -809,6 +817,14 @@ void LCD_Update(void)
     SDL_Event sdl_event;
     while (SDL_PollEvent(&sdl_event))
     {
+#ifdef WIN32
+        if (sdl_event.type == SDL_SYSWMEVENT) {
+            SDL_SysWMmsg *wmMsg = sdl_event.syswm.msg;
+            if (wmMsg->msg.win.msg == WM_APP) {
+                MCU_RemoteControlTrigger(LOBYTE(LOWORD(wmMsg->msg.win.wParam)));
+            }
+        }
+#endif
         if (sdl_event.type == SDL_KEYDOWN)
         {
             if (sdl_event.key.keysym.scancode == SDL_SCANCODE_COMMA)
@@ -827,7 +843,7 @@ void LCD_Update(void)
                         drag_volume_knob = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (drag_volume_knob && sdl_event.type != SDL_MOUSEBUTTONUP);
                     }
                     if (sdl_event.button.clicks == 2 && (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
-                        volume = 0.8;
+                        volume = 0.8f;
                         LCD_VolumeChanged();
                     } 
                 }
@@ -851,7 +867,7 @@ void LCD_Update(void)
             }
             case SDL_MOUSEMOTION:
                 if (drag_volume_knob) {
-                    float angle = (atan2(sdl_event.motion.y - 72, sdl_event.motion.x - 183) + 270.0f / 180.0f * M_PI);
+                    float angle = (float) (atan2(sdl_event.motion.y - 72, sdl_event.motion.x - 183) + 270.0f / 180.0f * M_PI);
                     if (isnan(angle)) {
                         angle = 270.0f / 180.0f * M_PI;
                     }
@@ -927,6 +943,7 @@ void LCD_Update(void)
 
                 SDL_AtomicSet(&mcu_button_pressed, (int)button_pressed);
 
+                // MCU_RemoteControlTrigger(0x01);
 #if 0
                 if (sdl_event.key.keysym.scancode >= SDL_SCANCODE_1 && sdl_event.key.keysym.scancode < SDL_SCANCODE_0)
                 {

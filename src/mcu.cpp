@@ -188,17 +188,43 @@ static uint16_t ad_val[4];
 static uint8_t ad_nibble = 0x00;
 static COMPUTER_SWITCH computer_switch = MIDI;
 static uint8_t io_sd = 0x00;
+static uint8_t rcu = 0x00;
 
 SDL_atomic_t mcu_button_pressed = { 0 };
 
+/**
+ * 0x00: ALL
+ * 0x01: MUTE
+ * 0x02: (Unknown)
+ * 0x03: POWER
+ * 0x04: PART L
+ * 0x05: PART R
+ * 0x06: INSTRUMENT L
+ * 0x07: INSTRUMENT R
+ * 0x08: LEVEL L
+ * 0x09: LEVEL R
+ * 0x0A: REVERB L
+ * 0x0B: REVERB R
+ * 0x0C: SONG L
+ * 0x0D: SONG R
+ * 0x0E: TEMPO L
+ * 0x0F: TEMPO R
+ * 0x10: STOP
+ * 0x11: PLAY
+ * 0x12: REW
+ * 0x13: FF
+ * 0x2A: 00101010
+ * 0x45: 01000101
+ * 0x50: 01010000
+ */
 uint8_t RCU_Read(void)
 {
-    return 0;
+    return rcu;
 }
 
 enum {
     ANALOG_LEVEL_RCU_LOW = 0,
-    ANALOG_LEVEL_RCU_HIGH = 0,
+    ANALOG_LEVEL_RCU_HIGH = 0x3ff,
     ANALOG_LEVEL_SW_0 = 0,
     ANALOG_LEVEL_SW_1 = 0x155,
     ANALOG_LEVEL_SW_2 = 0x2aa,
@@ -1459,6 +1485,13 @@ void MCU_EncoderTrigger(int dir)
     if (!mcu_jv880) return;
     MCU_GA_SetGAInt(dir == 0 ? 3 : 4, 0);
     MCU_GA_SetGAInt(dir == 0 ? 3 : 4, 1);
+}
+void MCU_RemoteControlTrigger(uint8_t data)
+{
+    if (mcu_jv880) return;
+    rcu = data;
+    MCU_GA_SetGAInt(2, 0);
+    MCU_GA_SetGAInt(2, 1);
 }
 
 static FILE *s_rf[ROM_SET_N_FILES] =

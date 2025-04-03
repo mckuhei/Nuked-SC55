@@ -484,6 +484,7 @@ void MCU_WriteP1(uint8_t data);
 void MCU_GA_SetGAInt(int line, int value);
 
 void MCU_EncoderTrigger(int dir);
+void MCU_RemoteControlTrigger(uint8_t data);
 
 void MCU_PostSample(int *sample);
 void MCU_PostUART(uint8_t data);
