@@ -54,6 +54,8 @@ static uint32_t LCD_DD_RAM, LCD_AC, LCD_CG_RAM;
 static uint32_t LCD_RAM_MODE = 0;
 static uint8_t LCD_Data[80];
 static uint8_t LCD_CG[64];
+static uint8_t LCD_DataBuffer[80];
+static uint8_t LCD_CGBuffer[64];
 
 static uint8_t lcd_enable = 0;
 static uint8_t lcd_button_enable = 0;
@@ -110,7 +112,7 @@ void LCD_Write(uint32_t address, uint8_t data)
         {
             LCD_DD_RAM = 0;
             LCD_ID = 1;
-            memset(LCD_Data, 0x20, sizeof(LCD_Data));
+            memset(LCD_DataBuffer, 0x20, sizeof(LCD_DataBuffer));
         }
         else if ((data & 0xff) == 0x02)
         {
@@ -140,7 +142,7 @@ void LCD_Write(uint32_t address, uint8_t data)
     {
         if (!LCD_RAM_MODE)
         {
-            LCD_CG[LCD_CG_RAM] = data & 0x1f;
+            LCD_CGBuffer[LCD_CG_RAM] = data & 0x1f;
             if (LCD_ID)
             {
                 LCD_CG_RAM++;
@@ -158,18 +160,18 @@ void LCD_Write(uint32_t address, uint8_t data)
                 if (LCD_DD_RAM & 0x40)
                 {
                     if ((LCD_DD_RAM & 0x3f) < 40)
-                        LCD_Data[(LCD_DD_RAM & 0x3f) + 40] = data;
+                        LCD_DataBuffer[(LCD_DD_RAM & 0x3f) + 40] = data;
                 }
                 else
                 {
                     if ((LCD_DD_RAM & 0x3f) < 40)
-                        LCD_Data[LCD_DD_RAM & 0x3f] = data;
+                        LCD_DataBuffer[LCD_DD_RAM & 0x3f] = data;
                 }
             }
             else
             {
                 if (LCD_DD_RAM < 80)
-                    LCD_Data[LCD_DD_RAM] = data;
+                    LCD_DataBuffer[LCD_DD_RAM] = data;
             }
             if (LCD_ID)
             {
@@ -316,7 +318,7 @@ void LCD_Init(void)
     }
 
     int screen_width, screen_height;
-    if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2 && background_enabled) {
+    if ((romset == ROM_SET_MK1 || romset == ROM_SET_MK2) && background_enabled) {
         screen_width = 1120;
         screen_height = 233;
     } else {
@@ -363,6 +365,11 @@ void LCD_UnInit(void)
 {
     if(!lcd_init)
         return;
+}
+
+void LCD_SwapBuffer(void) {
+    memcpy(LCD_Data, LCD_DataBuffer, sizeof(LCD_Data));
+    memcpy(LCD_CG, LCD_CGBuffer, sizeof(LCD_CG));
 }
 
 uint32_t lcd_col1 = 0x000000;
@@ -620,11 +627,23 @@ void LCD_Update(void)
                 }
             }
 
-            uint32_t con = 0x11 * (contrast - 1);
-            con = (con * con) >> 8;
-            lcd_col2 = LCD_MixColor(lcd_buffer[0][0], 0xFF - (con / 4 + 4));
-            lcd_col1 = LCD_MixColor(lcd_col2, 0x11 * (16 - (((contrast + 1) >> 1) + 4)));
-            // printf("bg: %06x, on: %06x, off: %06x contrast: %d pow(contrast, 2): %d\n", lcd_buffer[0][0] & 0xFFFFFF, lcd_col1  & 0xFFFFFF, lcd_col2  & 0xFFFFFF, contrast, con);
+            if (mcu_jv880) {
+                uint32_t con = contrast + 1;
+                con = (con * con * con);
+                con = (con * 104) / 1331;
+                lcd_col2 = LCD_MixColor(lcd_buffer[0][0], 0xFF - con);
+                con = contrast;
+                if (con > 4)
+                    con = 4;
+                con = con * con;
+                lcd_col1 = LCD_MixColor(lcd_col2, 255 - (con * 8));
+            } else {
+                uint32_t con = 0x11 * (contrast - 1);
+                con = (con * con) >> 8;
+                lcd_col2 = LCD_MixColor(lcd_buffer[0][0], 0xFF - (con / 4 + 4));
+                lcd_col1 = LCD_MixColor(lcd_col2, 0x11 * (16 - (((contrast + 1) >> 1) + 4)));
+                // printf("bg: %06x, on: %06x, off: %06x contrast: %d pow(contrast, 2): %d\n", lcd_buffer[0][0] & 0xFFFFFF, lcd_col1  & 0xFFFFFF, lcd_col2  & 0xFFFFFF, contrast, con);
+            }
 
             if (mcu_jv880)
             {
@@ -704,7 +723,7 @@ void LCD_Update(void)
         rect.h = lcd_height;
         SDL_UpdateTexture(texture, &rect, lcd_buffer, lcd_width_max * 4);
 
-        if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2 && background_enabled) {
+        if ((romset == ROM_SET_MK1 || romset == ROM_SET_MK2) && background_enabled) {
             SDL_Rect srcrect, dstrect;
             srcrect.x = 0;
             srcrect.y = 0;
@@ -833,7 +852,7 @@ void LCD_Update(void)
                 MCU_EncoderTrigger(1);
         }
 
-        if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2 && background_enabled) {
+        if ((romset == ROM_SET_MK1 || romset == ROM_SET_MK2) && background_enabled) {
             switch (sdl_event.type)
             {
             case SDL_MOUSEBUTTONUP:

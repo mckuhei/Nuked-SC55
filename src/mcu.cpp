@@ -1229,13 +1229,25 @@ static void MCU_Run()
     work_thread_run = true;
     SDL_Thread *thread = SDL_CreateThread(work_thread, "work thread", 0);
 
+    uint64_t ticks = SDL_GetTicks64();
+    uint64_t last_lcd_update = ticks;
+    uint64_t last_lcd_swap_buffer = ticks;
+
     while (working)
     {
         if(LCD_QuitRequested())
             working = false;
 
-        LCD_Update();
+        if (ticks - last_lcd_swap_buffer > 16) {
+            LCD_SwapBuffer();
+            last_lcd_swap_buffer = ticks;
+        }
+        while (ticks - last_lcd_update >= 16) {
+            LCD_Update();
+            last_lcd_update += 16;
+        }
         SDL_Delay(15);
+        ticks = SDL_GetTicks64();
     }
 
     work_thread_run = false;
@@ -2045,10 +2057,17 @@ int main(int argc, char *argv[])
     for (int i = 0; i < RAM_SIZE; i++)
         ram[i] = 0;
 
-    if (!s_rf[6] || fread(sram, 1, SRAM_SIZE, s_rf[6]) != SRAM_SIZE) {
-        printf("Unable to read SRAM, will initialized as blank memory.\n");
-        for (int i = 0; i < SRAM_SIZE; i++)
-            sram[i] = 0;
+    if (mcu_jv880) {
+        if (!s_rf[6] || fread(nvram, 1, NVRAM_SIZE, s_rf[6]) != NVRAM_SIZE) {
+            printf("Unable to read NVRAM, will initialized as blank memory.\n");
+            memset(nvram, 0, NVRAM_SIZE);
+            nvram[0x10] = 0x04; // contrast level
+        }
+    } else {
+        if (!s_rf[6] || fread(sram, 1, SRAM_SIZE, s_rf[6]) != SRAM_SIZE) {
+            printf("Unable to read SRAM, will initialized as blank memory.\n");
+            memset(sram, 0, SRAM_SIZE);
+        }
     }
 
     // Close all files as they no longer needed being open
@@ -2141,8 +2160,14 @@ int main(int argc, char *argv[])
 
     if (!rpaths[6].empty()) {
         FILE * fp = Files::utf8_fopen(rpaths[6].c_str(), "wb");
-        if (!fp ||fwrite(sram, 1, SRAM_SIZE, fp) != SRAM_SIZE) {
-            printf("Unable to save SRAM.");
+        if (mcu_jv880) {
+            if (!fp ||fwrite(nvram, 1, NVRAM_SIZE, fp) != NVRAM_SIZE) {
+                printf("Unable to save NVRAM.");
+            }
+        } else {
+            if (!fp ||fwrite(sram, 1, SRAM_SIZE, fp) != SRAM_SIZE) {
+                printf("Unable to save SRAM.");
+            }
         }
         fclose(fp);
     }

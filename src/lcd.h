@@ -50,5 +50,5 @@ void LCD_Enable(uint32_t enable);
 void LCD_ButtonEnable(uint8_t state);
 void LCD_SetContrast(uint8_t);
 bool LCD_QuitRequested();
-void LCD_Sync(void);
+void LCD_SwapBuffer(void);
 void LCD_Update(void);
