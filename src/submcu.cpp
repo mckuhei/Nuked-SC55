@@ -37,6 +37,7 @@
 #include "mcu.h"
 #include "submcu.h"
 #include "serial.h"
+#include "midi.h"
 
 enum {
     SM_VECTOR_UART3_TX = 0,
@@ -1492,6 +1493,9 @@ void SM_Update(uint64_t cycles)
         SM_UpdateTimer();
         SM_UpdateSerial();
         MCU_Midi_Lock();
+        if ((sm_device_mode[SM_DEV_UART2_CTRL] & 4) == 0) {
+            MIDI_Reset();
+        }
         SM_UpdateUART();
         MCU_Midi_Unlock();
         SERIAL_Update(sm.cycles);

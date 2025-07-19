@@ -6,12 +6,22 @@
 static RtMidiIn *s_midi_in = nullptr;
 static RtMidiOut *s_midi_out = nullptr;
 
+static uint8_t lastStatus = 0;
+
 static void MidiOnReceive(double, std::vector<uint8_t> *message, void *)
 {
     uint8_t *beg = message->data();
     uint8_t *end = message->data() + message->size();
 
     MCU_Midi_Lock();
+    uint8_t b1 = *beg;
+    if ((b1 & 0x80) != 0) {
+        if (b1 != lastStatus || b1 == 0xF0) {
+            lastStatus = b1;
+        } else {
+            beg++;
+        }
+    }
     while(beg < end)
         MCU_PostUART(*beg++);
     MCU_Midi_Unlock();
@@ -84,6 +94,8 @@ int MIDI_Init(int inport, int outport)
         s_midi_in->openPort(outport, "Nuked SC55");
     }
 
+    MIDI_Reset();
+
     return 1;
 }
 
@@ -148,4 +160,8 @@ int MIDI_GetMidiOutDevices(char* devices) {
     }
     delete rtmidi;
     return length;
+}
+
+void MIDI_Reset() {
+    lastStatus = 0;
 }

@@ -41,3 +41,4 @@ int MIDI_GetMidiInDevices(char* devices);
 int MIDI_GetMidiOutDevices(char* devices);
 void MIDI_PostShortMessge(uint8_t *message, int len);
 void MIDI_PostSysExMessge(uint8_t *message, int len);
+void MIDI_Reset();

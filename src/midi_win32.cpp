@@ -44,6 +44,8 @@ static MIDIHDR midi_buffer;
 
 static char midi_in_buffer[1024];
 
+static uint8_t lastStatus = 0;
+
 void CALLBACK MIDI_Callback(
     HMIDIIN   hMidiIn,
     UINT      wMsg,
@@ -59,7 +61,7 @@ void CALLBACK MIDI_Callback(
         case MIM_DATA:
         {
             MCU_Midi_Lock();
-            int b1 = dwParam1 & 0xff;
+            uint8_t b1 = (uint8_t) (dwParam1 & 0xff);
             switch (b1 & 0xf0)
             {
                 case 0x80:
@@ -67,16 +69,17 @@ void CALLBACK MIDI_Callback(
                 case 0xa0:
                 case 0xb0:
                 case 0xe0:
-                    MCU_PostUART(b1);
+                    if (b1 != lastStatus) MCU_PostUART(b1);
                     MCU_PostUART((dwParam1 >> 8) & 0xff);
                     MCU_PostUART((dwParam1 >> 16) & 0xff);
                     break;
                 case 0xc0:
                 case 0xd0:
-                    MCU_PostUART(b1);
+                    if (b1 != lastStatus) MCU_PostUART(b1);
                     MCU_PostUART((dwParam1 >> 8) & 0xff);
                     break;
             }
+            lastStatus = b1;
             MCU_Midi_Unlock();
             break;
         }
@@ -91,6 +94,10 @@ void CALLBACK MIDI_Callback(
                 for (int i = 0; i < midi_buffer.dwBytesRecorded; i++)
                 {
                     MCU_PostUART(midi_in_buffer[i]);
+                }
+                uint8_t b1 = (uint8_t) (midi_in_buffer[0] & 0xFF);
+                if ((b1 & 0x80) != 0) {
+                    lastStatus = b1;
                 }
                 MCU_Midi_Unlock();
             }
@@ -169,6 +176,8 @@ int MIDI_Init(int inport, int outport)
         printf("Opened midi output port: %s\n", caps.szPname);
     }
 
+    MIDI_Reset();
+
     return 1;
 }
 
@@ -244,4 +253,8 @@ int MIDI_GetMidiOutDevices(char* devices) {
         length++;
     }
     return length;
+}
+
+void MIDI_Reset() {
+    lastStatus = 0;
 }

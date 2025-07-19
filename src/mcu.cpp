@@ -1114,7 +1114,7 @@ void MCU_UpdateUART() {
             return;
         }
         if (uart_tx_ptr - tx_buffer >= len) {
-            MIDI_PostSysExMessge(tx_buffer, len);
+            MIDI_PostShortMessge(tx_buffer, len);
             // printf("TX: Short message", status);
             // for (int i = 0; i < len; i++) printf(" %02X", *tx_buffer++);
             // printf("\n");
@@ -1193,6 +1193,9 @@ int SDLCALL work_thread(void* data)
         else
         {
             MCU_Midi_Lock();
+            if ((dev_register[DEV_SCR] & 16) == 0) {
+                MIDI_Reset();
+            }
             MCU_UpdateUART_RX();
             MCU_UpdateUART_TX();
             MCU_Midi_Unlock();
