@@ -48,6 +48,7 @@
 #include "SDL_syswm.h"
 #endif
 
+#define SIN45 0.7071067811865476f
 
 static uint32_t LCD_DL, LCD_N, LCD_F, LCD_D, LCD_C, LCD_B, LCD_ID, LCD_S;
 static uint32_t LCD_DD_RAM, LCD_AC, LCD_CG_RAM;
@@ -58,7 +59,7 @@ static uint8_t LCD_DataBuffer[80];
 static uint8_t LCD_CGBuffer[64];
 
 static uint8_t lcd_enable = 0;
-static uint8_t lcd_button_enable = 0;
+static uint32_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
 static float volume = 0.8f; // default volume (-16dB)
 static uint8_t lcd_contrast = 0;
@@ -68,7 +69,7 @@ void LCD_Enable(uint32_t enable)
     lcd_enable = enable;
 }
 
-void LCD_ButtonEnable(uint8_t state)
+void LCD_ButtonEnable(uint32_t state)
 {
     lcd_button_enable = state;
 }
@@ -206,9 +207,6 @@ static uint32_t lcd_buffer[lcd_height_max][lcd_width_max];
 static uint32_t lcd_background[268][741];
 
 static uint32_t lcd_init = 0;
-
-static uint32_t drag_volume_knob = 0;
-
 static uint32_t background_enabled = 0;
 
 const int button_map_sc55[][2] =
@@ -289,6 +287,88 @@ const SDL_Rect button_regions_sc55[32] = {
     {0, 0, 0, 0}
 };
 
+const SDL_Rect button_regions_jv880[32] = {
+    {660, 129, 75, 25}, // Cursor L
+    {742, 129, 75, 25}, // Cursor R
+    {853, 129, 75, 25}, // Tone Select
+    {976, 129, 75, 25}, // Mute
+    {700, 34, 75, 75}, // Data
+    {1056, 129, 75, 25}, // Monitor
+    {1136, 129, 75, 25}, // Compare
+    {1216, 129, 75, 25}, // Enter
+    {1216, 53, 75, 25}, // Utility
+    {25, 86, 60, 60}, // Preview
+    {853, 53, 75, 25}, // Patch Perform
+    {976, 53, 75, 25}, // Edit
+    {1056, 53, 75, 25}, // System
+    {1136, 53, 75, 25}, // Rhythm
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
+};
+
+#define DEG2RAD(d) ((d) * M_PI / 180.0f)
+#define RAD2DEG(r) ((r) * 180.0f / M_PI)
+
+static LCD_Knob sc_volume = {
+	.x = 153,
+	.y = 42,
+	.w = 59,
+	.h = 59,
+	.dragging = 0,
+    .changed = 0,
+    .absolute = 1,
+	.angle = DEG2RAD(270.0f),
+	.step = 0.0f,
+	.min = DEG2RAD(30.0f),
+	.max = DEG2RAD(330.0f),
+    .def = DEG2RAD(270.0f),
+};
+
+static LCD_Knob jv_volume = {
+	.x = 25,
+	.y = 86,
+	.w = 60,
+	.h = 60,
+	.dragging = 0,
+    .changed = 0,
+    .absolute = 1,
+	.angle = DEG2RAD(270.0f),
+	.step = 0.0f,
+	.min = DEG2RAD(30.0f),
+	.max = DEG2RAD(330.0f),
+    .def = DEG2RAD(270.0f),
+};
+
+static LCD_Knob jv_encoder = {
+	.x = 700,
+	.y = 34,
+	.w = 75,
+	.h = 75,
+	.dragging = 0,
+    .changed = 0,
+    .absolute = 0,
+	.angle = DEG2RAD(180.0f),
+	.step = DEG2RAD(15.0f),
+	.min = 0.0f,
+	.max = DEG2RAD(360.0f),
+    .def = DEG2RAD(180.0f),
+};
 
 void LCD_SetBackPath(const std::string &path)
 {
@@ -312,18 +392,20 @@ void LCD_Init(void)
 
     if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2) {
         bg = SDL_LoadBMP("sc55_background.bmp");
-        if (bg) {
-            background_enabled = 1;
-        }
+    } else if (romset == ROM_SET_JV880) {
+        bg = SDL_LoadBMP("jv880_background.bmp");
     }
 
-    int screen_width, screen_height;
-    if ((romset == ROM_SET_MK1 || romset == ROM_SET_MK2) && background_enabled) {
-        screen_width = 1120;
-        screen_height = 233;
-    } else {
-        screen_width = lcd_width;
-        screen_height = lcd_height;
+    int screen_width = lcd_width, screen_height = lcd_height;
+    if (bg) {
+        background_enabled = 1;
+        if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2) {
+            screen_width = 1120;
+            screen_height = 233;
+        } else if (romset == ROM_SET_JV880) {
+            screen_width = 1436;
+            screen_height = 200;
+        }
     }
 
     window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_SHOWN);
@@ -578,6 +660,41 @@ static inline void LCD_VolumeChanged() {
     }
 }
 
+static inline void LCD_DrawKnob(LCD_Knob * knob, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+    SDL_Rect srcrect, dstrect;
+    srcrect.x = knob->x << 1;
+    srcrect.y = knob->y << 1;
+    srcrect.w = knob->w << 1;
+    srcrect.h = knob->h << 1;
+    dstrect.x = knob->x;
+    dstrect.y = knob->y;
+    dstrect.w = knob->w;
+    dstrect.h = knob->h;
+    SDL_RenderCopyEx(renderer, background, &srcrect, &dstrect, RAD2DEG(fmodf(knob->angle, M_PI * 2.0f)), NULL, flip);
+    { // Top And Down
+        int s = knob->h - (int) floor(knob->h * SIN45);
+        dstrect.y -= s;
+        dstrect.h  = s;
+        srcrect.y -= s << 1;
+        srcrect.h  = s << 1;
+        SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+        dstrect.y += (knob->h + s);
+        srcrect.y += (knob->h + s) << 1;
+        SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+    }
+    { // Left And Right
+        int s = knob->w - (int) floor(knob->w * SIN45);
+        dstrect.x -= s;
+        dstrect.w  = s;
+        srcrect.x -= s << 1;
+        srcrect.w  = s << 1;
+        SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+        dstrect.x += (knob->w + s);
+        srcrect.x += (knob->w + s) << 1;
+        SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+    }
+}
+
 void LCD_Update(void)
 {
     if (!lcd_init)
@@ -758,17 +875,7 @@ void LCD_Update(void)
                 dstrect.h = 10;
                 SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
             }
-            { // Volume
-                srcrect.x = 54;
-                srcrect.y = 468;
-                srcrect.w = 118;
-                srcrect.h = 118;
-                dstrect.x = 153;
-                dstrect.y = 42;
-                dstrect.w = 59;
-                dstrect.h = 59;
-                SDL_RenderCopyEx(renderer, background, &srcrect, &dstrect, (volume - 0.5f) * 300.0, NULL, SDL_FLIP_NONE);
-            }
+            LCD_DrawKnob(&sc_volume, SDL_FLIP_VERTICAL);
             {
                 int type = 1;
                 if (romset == ROM_SET_MK1) {
@@ -827,6 +934,89 @@ void LCD_Update(void)
             dstrect.w = 370;
             dstrect.h = 134;
             SDL_RenderCopy(renderer, texture, &srcrect, &dstrect);
+        } else if (romset == ROM_SET_JV880 && background_enabled) {
+            SDL_Rect srcrect, dstrect;
+            srcrect.x = 0;
+            srcrect.y = 0;
+            srcrect.w = 2872;
+            srcrect.h = 400;
+            SDL_RenderCopy(renderer, background, &srcrect, NULL);
+            LCD_DrawKnob(&jv_volume);
+            LCD_DrawKnob(&jv_encoder);
+            // MIDI Message
+            srcrect.x = 150;
+            srcrect.y = 400 + 8 * (lcd_button_enable & 1);
+            srcrect.w = 40;
+            srcrect.h = 8;
+            dstrect.x = 1355;
+            dstrect.y = 26;
+            dstrect.w = 20;
+            dstrect.h = 4;
+            SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 2) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_EDIT]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 4) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_SYSTEM]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 8) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_RHYTHM]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 16) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_UTILITY]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 32) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_PATCH_PERFORM]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 64) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_MUTE]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 128) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_MONITOR]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 256) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_COMPARE]);
+
+            srcrect.x = 0;
+            srcrect.y = 400 + 50 * ((lcd_button_enable & 512) != 0);
+            srcrect.w = 150;
+            srcrect.h = 50;
+            SDL_RenderCopy(renderer, background, &srcrect, &button_regions_jv880[MCU_BUTTON_ENTER]);
+
+            srcrect.x = 0;
+            srcrect.y = 0;
+            srcrect.w = 820;
+            srcrect.h = 100;
+            dstrect.x = 174;
+            dstrect.y = 83;
+            dstrect.w = 410;
+            dstrect.h = 50;
+            SDL_RenderCopy(renderer, texture, &srcrect, &dstrect);
         } else {
             SDL_RenderCopy(renderer, texture, NULL, NULL);
         }
@@ -852,26 +1042,47 @@ void LCD_Update(void)
                 MCU_EncoderTrigger(1);
         }
 
-        if ((romset == ROM_SET_MK1 || romset == ROM_SET_MK2) && background_enabled) {
+        if ((romset == ROM_SET_MK1 || romset == ROM_SET_MK2 || romset == ROM_SET_JV880) && background_enabled) {
+            constexpr LCD_Knob* sc_knobs[] = {&sc_volume};
+            constexpr LCD_Knob* jv_knobs[] = {&jv_volume, &jv_encoder};
+            const SDL_Rect* button_regions = &button_regions_sc55[0];
+            auto knobs = &sc_knobs[0];
+            int knobcount = 1;
+            if (romset == ROM_SET_JV880) {
+                button_regions = &button_regions_jv880[0];
+                knobs = &jv_knobs[0];
+                knobcount = 2;
+            }
+
             switch (sdl_event.type)
             {
             case SDL_MOUSEBUTTONUP:
             case SDL_MOUSEBUTTONDOWN: {
+                int skip_button_handling = 0;
                 if (sdl_event.button.button == 1) {
-                    if (drag_volume_knob || (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
-                        drag_volume_knob = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (drag_volume_knob && sdl_event.type != SDL_MOUSEBUTTONUP);
+                    for (int i = 0; i < knobcount; i++) {
+                        LCD_Knob* knob = knobs[i];
+                        if (knob->dragging || (sdl_event.button.x >= knob->x && sdl_event.button.x <= (knob->x + knob->w) && sdl_event.button.y >= knob->y && sdl_event.button.y <= (knob->y + knob->h))) {
+                            knob->dragging = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (knob->dragging && sdl_event.type != SDL_MOUSEBUTTONUP);
+                            if (knob->dragging) {
+                                knob->inital = (float) atan2(sdl_event.button.y - (knob->y + (knob->h >> 1)), sdl_event.button.x - (knob->x + (knob->w >> 1))) + DEG2RAD(270.0f);
+                                skip_button_handling = 1;
+                                break;
+                            }
+                        }
+                        if (sdl_event.button.clicks == 2 && (sdl_event.button.x >= knob->x && sdl_event.button.x <= (knob->x + knob->w) && sdl_event.button.y >= knob->y && sdl_event.button.y <= (knob->y + knob->h))) {
+                            knob->angle = knob->def;
+                            knob->changed = 1;
+                        }
                     }
-                    if (sdl_event.button.clicks == 2 && (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
-                        volume = 0.8f;
-                        LCD_VolumeChanged();
-                    } 
                 }
+                if (skip_button_handling) break;
                 int32_t x = sdl_event.button.x;
                 int32_t y = sdl_event.button.y;
                 int mask = 0;
                 uint32_t button_pressed = (uint32_t)SDL_AtomicGet(&mcu_button_pressed);
                 for (int i = 0; i < 32; i++) {
-                    const SDL_Rect *rect = &button_regions_sc55[i];
+                    const SDL_Rect *rect = &button_regions[i];
                     if (rect->x == 0 && rect->y == 0 && rect->w == 0 && rect->h == 0) continue;
                     if (x >= rect->x && x <= rect->x + rect->w && y >= rect->y && y <= rect->y + rect->h) {
                         mask |= 1 << i;
@@ -885,50 +1096,106 @@ void LCD_Update(void)
                 break;
             }
             case SDL_MOUSEMOTION:
-                if (drag_volume_knob) {
-                    float angle = (float) (atan2(sdl_event.motion.y - 72, sdl_event.motion.x - 183) + 270.0f / 180.0f * M_PI);
+                for (int i = 0; i < knobcount; i++) {
+                    LCD_Knob* knob = knobs[i];
+                    if (!knob->dragging)
+                        continue;
+                    float angle = (float) atan2(sdl_event.motion.y - (knob->y + (knob->h >> 1)), sdl_event.motion.x - (knob->x + (knob->w >> 1))) + DEG2RAD(270.0f);
                     if (isnan(angle)) {
-                        angle = 270.0f / 180.0f * M_PI;
+                        break;
                     }
-                    if (angle > 2.0 * M_PI) {
-                        angle = angle - 2.0 * M_PI;
+                    if (angle > M_PI * 2.0f) {
+                        angle = angle - M_PI * 2.0f;
                     }
-                    if (angle > 330.0f / 180.0f * M_PI)
-                        angle = 330.0f / 180.0f * M_PI;
-                    if (angle < 30.0f / 180.0f * M_PI)
-                        angle = 30.0f / 180.0f * M_PI;
-                    float delta = (angle - 30.0f / 180.0f * M_PI) / (300.0f / 180.0f * M_PI) - volume;
-                    if (abs(delta) > 0.5f) {
-                        delta = 0.0f;
-                    }
-                    if (volume > 0.8f || volume + delta > 0.8f) {
-                        if (delta > 0.005f) {
-                            delta = 0.005f;
+                    if (angle > knob->max && knob->max < M_PI * 2.0f)
+                        angle = knob->max;
+                    if (angle < knob->min && knob->min > 0.0f)
+                        angle = knob->min;
+                    float delta;
+                    if (knob->absolute) {
+                        delta = angle - knob->angle;
+                        if (abs(delta) > M_PI) {
+                            delta = 0.0f;
                         }
-                        if (delta < -0.005f) {
-                            delta = -0.005f;
+                    } else {
+                        delta = fmodf(angle - knob->inital, M_PI * 2.0f);
+
+                        if (delta >= +M_PI) {
+                            delta += -M_PI * 2.0f;
+                        }
+                        if (delta <= -M_PI) {
+                            delta += +M_PI * 2.0f;
                         }
                     }
-                    volume += delta;
-                    LCD_VolumeChanged();
+                    if (knob->step > 0.0f) {
+                        float step = knob->step;
+                        delta = floor(delta / step) * step;
+                    }
+                    if (delta != 0.0f) {
+                        knob->angle += delta;
+                        knob->delta += delta;
+                        knob->inital += delta;
+                        knob->changed = 1;
+                    }
                 }
                 break;
             case SDL_MOUSEWHEEL:
-                if (sdl_event.wheel.mouseX >= 153 && sdl_event.wheel.mouseX <= 212 && sdl_event.wheel.mouseY >= 42 && sdl_event.wheel.mouseY <= 101) {
-                    int32_t relval = sdl_event.wheel.y;
-                    if (relval > 10) { // Maximum ±2dB incremental
-                        relval = 10;
+                for (int i = 0; i < knobcount; i++) {
+                    LCD_Knob* knob = knobs[i];
+                    if (sdl_event.wheel.mouseX >= knob->x && sdl_event.wheel.mouseX <= (knob->x + knob->w) && sdl_event.wheel.mouseY >= knob->y && sdl_event.wheel.mouseY <= (knob->y + knob->h)) {
+                        float delta = sdl_event.wheel.y;
+                        if (knob->step > 0)
+                            delta *= knob->step;
+                        else
+                            delta *= DEG2RAD(5.0f);
+                        float angle = knob->angle + delta;
+                        if (angle > knob->max && knob->max < DEG2RAD(360.0f))
+                            angle = knob->max;
+                        if (angle < knob->min && knob->min > 0.0f)
+                            angle = knob->min;
+                        delta = angle - knob->angle;
+                        if (delta != 0) {
+                            knob->angle += delta;
+                            knob->delta += delta;
+                            knob->changed = 1;
+                        }
+                        break;
                     }
-                    if (relval < -10) {
-                        relval = -10;
-                    }
-                    volume += relval / 400.0f;
-                    LCD_VolumeChanged();
                 }
                 break;
 
             default:
                 break;
+            }
+        }
+
+        if (background_enabled) {
+            LCD_Knob* volume_knob = nullptr;
+            if (romset == ROM_SET_MK1 || romset == ROM_SET_MK2) {
+                volume_knob = &sc_volume;
+            } else if (romset == ROM_SET_JV880) {
+                volume_knob = &jv_volume;
+                if (jv_encoder.changed) {
+                    jv_encoder.changed = 0;
+                    // printf("Knob: %.1f Delta: %.1f\n", RAD2DEG(jv_encoder.angle), RAD2DEG(jv_encoder.delta));
+                    int encoder = (int) ceil(jv_encoder.delta / jv_encoder.step);
+                    jv_encoder.delta = 0;
+                    while (encoder > 0) {
+                        MCU_EncoderTrigger(1);
+                        encoder -= 1;
+                    }
+                    while (encoder < 0) {
+                        MCU_EncoderTrigger(0);
+                        encoder += 1;
+                    }
+                }
+            }
+            if (volume_knob != nullptr) {
+                if (volume_knob->changed) {
+                    volume_knob->changed = 0;
+                    volume = (sc_volume.angle - sc_volume.min) / (sc_volume.max - sc_volume.min);
+                    LCD_VolumeChanged();
+                }
             }
         }
 
@@ -962,7 +1229,6 @@ void LCD_Update(void)
 
                 SDL_AtomicSet(&mcu_button_pressed, (int)button_pressed);
 
-                // MCU_RemoteControlTrigger(0x01);
 #if 0
                 if (sdl_event.key.keysym.scancode >= SDL_SCANCODE_1 && sdl_event.key.keysym.scancode < SDL_SCANCODE_0)
                 {

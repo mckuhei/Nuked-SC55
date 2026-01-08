@@ -266,6 +266,7 @@ endmacro()
 
 copy_rom_target(back_data back.data)
 copy_rom_target(sc55_background.bmp sc55_background.bmp)
+copy_rom_target(jv880_background.bmp jv880_background.bmp)
 
 install(TARGETS nuked-sc55
         EXPORT NukedSC55StaticTargets

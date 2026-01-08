@@ -36,6 +36,12 @@
 #include <stdint.h>
 #include <string>
 
+typedef struct {
+	int x, y, w, h;
+	int dragging, changed, absolute;
+	float angle, step, min, max, def, delta, inital;
+} LCD_Knob;
+
 extern int lcd_width;
 extern int lcd_height;
 
@@ -47,7 +53,7 @@ void LCD_Init(void);
 void LCD_UnInit(void);
 void LCD_Write(uint32_t address, uint8_t data);
 void LCD_Enable(uint32_t enable);
-void LCD_ButtonEnable(uint8_t state);
+void LCD_ButtonEnable(uint32_t state);
 void LCD_SetContrast(uint8_t);
 bool LCD_QuitRequested();
 void LCD_SwapBuffer(void);

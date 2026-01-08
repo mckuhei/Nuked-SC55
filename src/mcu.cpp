@@ -189,6 +189,7 @@ static uint8_t ad_nibble = 0x00;
 static COMPUTER_SWITCH computer_switch = MIDI;
 static uint8_t io_sd = 0x00;
 static uint8_t rcu = 0x00;
+static uint32_t jv880_led_state;
 
 SDL_atomic_t mcu_button_pressed = { 0 };
 
@@ -417,6 +418,36 @@ void MCU_DeviceWrite(uint32_t address, uint8_t data)
     case DEV_PWM3_TCR:
         break;
     case DEV_P7DR:
+        if (mcu_jv880 && mcu.cp == 0 && ((mcu.pc & 0xFF00) == 0x3600)) { // Temporary fix, filter out useless data
+            if ((io_sd & 1) == 0) {
+                jv880_led_state &= ~0x1f;
+                if ((data & 0x10) != 0)
+                    jv880_led_state |= 1; // MIDI Message
+                if ((data & 0x8) != 0)
+                    jv880_led_state |= 2; // Edit
+                if ((data & 0x4) != 0)
+                    jv880_led_state |= 4; // System
+                if ((data & 0x2) != 0)
+                    jv880_led_state |= 8; // Rhythm
+                if ((data & 0x1) != 0)
+                    jv880_led_state |= 16; // Utility
+            }
+            if ((io_sd & 2) == 0) {
+                jv880_led_state &= ~0x3e0;
+                if ((data & 0x10) != 0)
+                    jv880_led_state |= 32; // Patch Perform
+                if ((data & 0x8) != 0)
+                    jv880_led_state |= 64; // Mute
+                if ((data & 0x4) != 0)
+                    jv880_led_state |= 128; // Monitor
+                if ((data & 0x2) != 0)
+                    jv880_led_state |= 256; // Info
+                if ((data & 0x1) != 0)
+                    jv880_led_state |= 512; // Enter
+            }
+            // printf("data: %02x io_sd: %02x state: %08x\n", data, io_sd, jv880_led_state);
+            LCD_ButtonEnable(jv880_led_state);
+        }
         break;
     case DEV_TMR_TCNT:
         break;
