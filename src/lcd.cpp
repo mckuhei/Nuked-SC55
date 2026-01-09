@@ -1193,7 +1193,7 @@ void LCD_Update(void)
             if (volume_knob != nullptr) {
                 if (volume_knob->changed) {
                     volume_knob->changed = 0;
-                    volume = (sc_volume.angle - sc_volume.min) / (sc_volume.max - sc_volume.min);
+                    volume = (volume_knob->angle - volume_knob->min) / (volume_knob->max - volume_knob->min);
                     LCD_VolumeChanged();
                 }
             }
