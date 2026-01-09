@@ -1178,7 +1178,7 @@ void LCD_Update(void)
                 if (jv_encoder.changed) {
                     jv_encoder.changed = 0;
                     // printf("Knob: %.1f Delta: %.1f\n", RAD2DEG(jv_encoder.angle), RAD2DEG(jv_encoder.delta));
-                    int encoder = (int) ceil(jv_encoder.delta / jv_encoder.step);
+                    int encoder = (int) round(jv_encoder.delta / jv_encoder.step);
                     jv_encoder.delta = 0;
                     while (encoder > 0) {
                         MCU_EncoderTrigger(1);
